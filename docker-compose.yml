@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  calculadora-app:
+    # A instrução 'build' diz ao Portainer para construir a imagem.
+    build:
+      # O ponto "." significa: "use o Dockerfile que está nesta mesma pasta (a do repositório GitHub)".
+      context: .
+    
+    container_name: calculadora-saas
+    restart: unless-stopped
+    
+    # Volumes para garantir que o banco de dados e os PDFs não se percam.
+    # Estes caminhos são os da sua VPS.
+    volumes:
+      - /home/ubuntu/calculadora-data/leads.db:/app/leads.db
+      - /home/ubuntu/calculadora-data/completed_pdfs:/app/completed_pdfs
+      
+    # Etiquetas que ensinam o Traefik (seu gestor de domínios) a encontrar esta aplicação.
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.calculadora-secure.rule=Host(`calculotrabalhista.mbbaj.adv.br`)"
+      - "traefik.http.routers.calculadora-secure.entrypoints=websecure"
+      - "traefik.http.routers.calculadora-secure.tls=true"
+      - "traefik.http.routers.calculadora-secure.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.calculadora-secure.service=calculadora-service"
+      - "traefik.http.services.calculadora-service.loadbalancer.server.port=3000"
+      
+    # Conecta esta aplicação à rede 'calculadora' da sua VPS.
+    networks:
+      - calculadora
+
+networks:
+  calculadora:
+    external: true

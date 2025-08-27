@@ -1,0 +1,13 @@
+# Ignorar a pasta de módulos do Node, que será instalada dentro do contêiner.
+node_modules
+
+# MUITO IMPORTANTE: Ignorar o ficheiro de segredos para não expor senhas na imagem.
+.env
+
+# Ignorar o banco de dados local e os PDFs. Usaremos volumes para eles.
+leads.db
+completed_pdfs/
+
+# Ignorar pastas e ficheiros do Git.
+.git
+.gitignore

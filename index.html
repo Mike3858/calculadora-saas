@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora de Rescisão Indireta</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/imask"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .spinner {
+            border: 2px solid rgba(0, 0, 0, 0.2); border-radius: 50%; border-top-color: #3498db;
+            width: 24px; height: 24px; animation: spin 1s ease-in-out infinite;
+        }
+        .spinner-btn {
+            border: 2px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top-color: #fff;
+            width: 16px; height: 16px; animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .preview-table { border-collapse: collapse; width: 100%; }
+        .preview-table th, .preview-table td { text-align: left; padding: 12px; border-bottom: 1px solid #e5e7eb; }
+        .preview-table th { background-color: #f9fafb; }
+        .preview-table tr:last-child td { border-bottom: none; }
+        .total-row td { font-weight: bold; }
+        .blurred-value { filter: blur(6px); cursor: not-allowed; user-select: none; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+    <div class="container mx-auto p-4 md:p-8 max-w-4xl">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-blue-600">Calculadora de Rescisão Indireta</h1>
+            <p id="header-subtitle" class="text-gray-600 mt-2">Preencha os dados para gerar uma prévia do seu cálculo.</p>
+        </header>
+
+        <main id="main-content" class="bg-white p-6 md:p-8 rounded-2xl shadow-lg">
+            <!-- Formulário Principal -->
+            <div id="form-section">
+                <form id="calculation-form">
+                    <h2 class="text-xl font-semibold text-gray-800 border-b pb-2 mb-6">1. Seus Dados</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        <div>
+                            <label for="user-name" class="block text-sm font-medium text-gray-700">Seu Nome</label>
+                            <input type="text" id="user-name" name="name" placeholder="Nome Completo" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                        </div>
+                        <div>
+                            <label for="user-email" class="block text-sm font-medium text-gray-700">Seu melhor e-mail</label>
+                            <input type="email" id="user-email" name="email" placeholder="seuemail@exemplo.com" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                        </div>
+                         <div>
+                            <label for="user-whatsapp" class="block text-sm font-medium text-gray-700">Seu WhatsApp</label>
+                            <input type="text" id="user-whatsapp" name="whatsapp" placeholder="(11) 99999-9999" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                        </div>
+                    </div>
+                    <h2 class="text-xl font-semibold text-gray-800 border-b pb-2 mb-6 mt-8">2. Dados do Contrato</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="start-date" class="block text-sm font-medium text-gray-700">Data de Admissão</label>
+                            <input type="date" id="start-date" name="start-date" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                        </div>
+                        <div>
+                            <label for="end-date" class="block text-sm font-medium text-gray-700">Data da Saída (Rescisão)</label>
+                            <input type="date" id="end-date" name="end-date" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                        </div>
+                        <div>
+                            <label for="last-salary" class="block text-sm font-medium text-gray-700">Último Salário Bruto (R$)</label>
+                            <input type="text" id="last-salary" name="last-salary" placeholder="R$ 2.500,00" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                        </div>
+                        <div>
+                            <label for="ferias-vencidas" class="block text-sm font-medium text-gray-700">Nº de Férias Vencidas</label>
+                            <input type="number" id="ferias-vencidas" name="ferias-vencidas" min="0" value="0" placeholder="Ex: 0, 1, 2" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                        </div>
+                    </div>
+                    <h2 class="text-xl font-semibold text-gray-800 border-b pb-2 mb-6 mt-10">3. Marque as irregularidades cometidas pela empresa (Opcional)</h2>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="flex items-start"><input id="fgts" name="irregularity" value="FGTS não depositado" type="checkbox" class="h-4 w-4 mt-1 rounded"><label for="fgts" class="ml-3 block text-sm text-gray-700">FGTS não depositado</label></div>
+                        <div class="flex items-start"><input id="salario-atrasado" name="irregularity" value="Atraso de salário" type="checkbox" class="h-4 w-4 mt-1 rounded"><label for="salario-atrasado" class="ml-3 block text-sm text-gray-700">Atraso de salário</label></div>
+                        <div class="flex items-start"><input id="assedio" name="irregularity" value="Assédio moral" type="checkbox" class="h-4 w-4 mt-1 rounded"><label for="assedio" class="ml-3 block text-sm text-gray-700">Assédio moral</label></div>
+                        <div class="flex items-start"><input id="horas-extras" name="irregularity" value="Não pagamento de horas extras" type="checkbox" class="h-4 w-4 mt-1 rounded"><label for="horas-extras" class="ml-3 block text-sm text-gray-700">Não pagamento de horas extras</label></div>
+                        <div class="flex items-start"><input id="jornada-excessiva" name="irregularity" value="Jornada de trabalho excessiva" type="checkbox" class="h-4 w-4 mt-1 rounded"><label for="jornada-excessiva" class="ml-3 block text-sm text-gray-700">Jornada de trabalho excessiva</label></div>
+                        <div class="flex items-start"><input id="ambiente-inseguro" name="irregularity" value="Ambiente de trabalho inseguro" type="checkbox" class="h-4 w-4 mt-1 rounded"><label for="ambiente-inseguro" class="ml-3 block text-sm text-gray-700">Ambiente de trabalho inseguro</label></div>
+                        <div class="flex items-start"><input id="desvio-funcao" name="irregularity" value="Desvio de função" type="checkbox" class="h-4 w-4 mt-1 rounded"><label for="desvio-funcao" class="ml-3 block text-sm text-gray-700">Desvio de função</label></div>
+                        <div class="flex items-start"><input id="outros" name="irregularity" value="Outras faltas graves" type="checkbox" class="h-4 w-4 mt-1 rounded"><label for="outros" class="ml-3 block text-sm text-gray-700">Outras faltas graves</label></div>
+                    </div>
+                    <div class="mt-8 text-center">
+                        <button id="calculate-button" type="button" class="w-full md:w-auto bg-blue-600 text-white font-bold py-3 px-10 rounded-lg shadow-md flex items-center justify-center gap-3">
+                            <span id="calculate-button-text">Ver Prévia do Cálculo</span>
+                            <div id="spinner-calculate" class="spinner-btn hidden"></div>
+                        </button>
+                    </div>
+                </form>
+            </div>
+            
+            <div id="blurred-result-section" class="hidden mt-10 text-center">
+                <h2 class="text-2xl font-bold text-gray-800">Seu resultado está pronto!</h2>
+                <div class="overflow-x-auto bg-white rounded-lg shadow my-6">
+                    <table id="result-table-content" class="preview-table"></table>
+                </div>
+                <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded-lg text-left mb-6">
+                  <p class="font-bold">Desbloqueie seu resultado completo!</p>
+                  <p>Para disponibilizar seu cálculo detalhado e nos ajudar a manter este sistema no ar para que outros trabalhadores possam ter acesso, pedimos uma pequena contribuição.</p>
+                </div>
+                <button id="payment-button" type="button" class="w-full md:w-auto bg-green-500 text-white font-bold py-3 px-10 rounded-lg shadow-md flex items-center justify-center gap-3">
+                    <span id="payment-button-text">Pagar R$ 29,90 e Desbloquear</span>
+                    <div id="spinner-payment" class="spinner-btn hidden"></div>
+                </button>
+            </div>
+        </main>
+
+        <div id="success-section" class="hidden text-center bg-white p-8 md:p-12 rounded-2xl shadow-lg">
+            <div id="waiting-message">
+                <div class="spinner mx-auto mb-4"></div>
+                <h2 class="text-2xl font-bold text-gray-800">Pagamento aprovado!</h2>
+                <p class="text-gray-600 mt-2">Aguarde um instante, estamos a gerar o seu cálculo detalhado...</p>
+            </div>
+            <div id="download-area" class="hidden">
+                 <h2 class="text-2xl font-bold text-green-600">Cálculo Pronto!</h2>
+                 <p class="text-gray-600 mt-2 mb-6">Clique no botão abaixo para fazer o download do seu documento em PDF.</p>
+                 <a id="download-button" href="#" class="w-full md:w-auto bg-blue-600 text-white font-bold py-3 px-10 rounded-lg shadow-md inline-block">
+                    Fazer Download do Cálculo
+                 </a>
+                 <p class="text-sm text-gray-500 mt-4">Uma cópia de segurança também foi enviada para o seu e-mail.</p>
+            </div>
+            <div id="contact-section" class="hidden mt-10 border-t pt-8">
+                <h3 class="text-xl font-bold text-gray-800">Precisa de Ajuda Profissional?</h3>
+                <p class="text-gray-600 mt-2 mb-6">Seu caso parece complexo ou você gostaria de uma análise detalhada por um especialista? Fale com um advogado trabalhista agora mesmo.</p>
+                <p class="text-gray-800 font-semibold">Dr. Mike Advogado</p>
+                <p class="text-gray-600">Especialista em Direito do Trabalho</p>
+                <a id="whatsapp-link" href="https://wa.me/5511999999999" target="_blank" class="mt-4 w-full md:w-auto bg-green-500 text-white font-bold py-3 px-10 rounded-lg shadow-md inline-flex items-center justify-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M13.601 2.326A7.854 7.854 0 0 0 7.994 0C3.627 0 .068 3.558.064 7.926c0 1.399.366 2.76 1.057 3.965L0 16l4.204-1.102a7.933 7.933 0 0 0 3.79.965h.004c4.368 0 7.926-3.558 7.93-7.93A7.898 7.898 0 0 0 13.6 2.326zM7.994 14.521a6.573 6.573 0 0 1-3.356-.92l-.24-.144-2.494.654.666-2.433-.156-.251a6.56 6.56 0 0 1-1.007-3.505c0-3.626 2.957-6.584 6.591-6.584a6.56 6.56 0 0 1 4.66 1.931 6.557 6.557 0 0 1 1.928 4.66c-.004 3.639-2.961 6.592-6.592 6.592zm3.615-4.934c-.197-.099-1.17-.578-1.353-.646-.182-.065-.315-.099-.445.099-.133.197-.513.646-.627.775-.114.133-.232.148-.43.05-.197-.1-.836-.308-1.592-.985-.59-.525-.985-1.175-1.103-1.372-.114-.198-.011-.304.088-.403.087-.088.197-.232.296-.346.1-.114.133-.198.198-.33.065-.134.034-.248-.015-.347-.05-.099-.445-1.076-.612-1.47-.16-.389-.323-.335-.445-.34-.114-.007-.247-.007-.38-.007a.729.729 0 0 0-.529.247c-.182.198-.691.677-.691 1.654 0 .977.71 1.916.81 2.049.098.133 1.394 2.132 3.383 2.992.47.205.84.326 1.129.418.475.152.904.129 1.246.08.38-.058 1.171-.48 1.338-.943.164-.464.164-.86.114-.943-.049-.084-.182-.133-.38-.232z"/></svg>
+                    Falar com Advogado
+                </a>
+            </div>
+        </div>
+
+        <footer class="text-center mt-8 text-sm text-gray-500">
+             <p>&copy; 2025 Calculadora de Direitos.</p>
+        </footer>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const backendUrl = 'https://calculotrabalhista.mbbaj.adv.br';
+
+            const mainContent = document.getElementById('main-content');
+            const formSection = document.getElementById('form-section');
+            const blurredResultSection = document.getElementById('blurred-result-section');
+            const successSection = document.getElementById('success-section');
+            
+            const form = document.getElementById('calculation-form');
+            const calculateButton = document.getElementById('calculate-button');
+            const paymentButton = document.getElementById('payment-button');
+            const resultTable = document.getElementById('result-table-content');
+
+            let formDataForPayment = {};
+
+            const salaryMask = IMask(document.getElementById('last-salary'), {
+                mask: 'R$ num',
+                blocks: { num: { mask: Number, thousandsSeparator: '.', radix: ',', scale: 2, padFractionalZeros: true } }
+            });
+            IMask(document.getElementById('user-whatsapp'), { mask: '(00) 00000-0000' });
+
+            calculateButton.addEventListener('click', async () => {
+                if (!form.checkValidity()) {
+                    form.reportValidity();
+                    return;
+                }
+                setButtonLoading(calculateButton, true);
+                const formData = new FormData(form);
+                const data = Object.fromEntries(formData.entries());
+                data['last-salary'] = salaryMask.unmaskedValue;
+                data.irregularities = Array.from(document.querySelectorAll('input[name="irregularity"]:checked')).map(cb => cb.value);
+                formDataForPayment = data;
+                try {
+                    const response = await fetch(`${backendUrl}/preview-calculation`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    });
+                    if (!response.ok) throw new Error('Falha ao buscar a prévia');
+                    const results = await response.json();
+                    let tableHTML = `<thead><tr><th>Verba</th><th class="text-right">Valor Estimado (R$)</th></tr></thead><tbody>`;
+                    Object.entries(results).forEach(([key, value]) => {
+                        const isTotal = key === 'TOTAL GERAL ESTIMADO';
+                        const rowClass = isTotal ? 'total-row bg-gray-50' : '';
+                        tableHTML += `<tr class="${rowClass}"><td>${key}</td><td class="text-right blurred-value">${formatCurrency(value)}</td></tr>`;
+                    });
+                    tableHTML += `</tbody>`;
+                    resultTable.innerHTML = tableHTML;
+                    formSection.classList.add('hidden');
+                    blurredResultSection.classList.remove('hidden');
+                } catch (error) {
+                    console.error('Erro ao gerar prévia:', error);
+                    alert('Não foi possível gerar a prévia. Verifique os dados e tente novamente.');
+                } finally {
+                    setButtonLoading(calculateButton, false);
+                }
+            });
+
+            paymentButton.addEventListener('click', async () => {
+                localStorage.setItem('lastCalcData', JSON.stringify(formDataForPayment));
+                setButtonLoading(paymentButton, true);
+                try {
+                    const response = await fetch(`${backendUrl}/create-payment`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(formDataForPayment)
+                    });
+                    if (!response.ok) throw new Error('Erro ao criar o pagamento.');
+                    const paymentData = await response.json();
+                    window.location.href = paymentData.init_point;
+                } catch (error) {
+                    console.error('Erro ao iniciar pagamento:', error);
+                    alert('Não foi possível iniciar o pagamento. Tente novamente.');
+                    setButtonLoading(paymentButton, false);
+                }
+            });
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const preferenceId = urlParams.get('preference_id');
+            const status = urlParams.get('status');
+
+            if (preferenceId && status === 'approved') {
+                mainContent.classList.add('hidden');
+                successSection.classList.remove('hidden');
+                document.getElementById('header-subtitle').textContent = 'Seu cálculo está quase pronto!';
+                const interval = setInterval(async () => {
+                    try {
+                        const res = await fetch(`${backendUrl}/status/${preferenceId}`);
+                        if (res.ok) {
+                            const data = await res.json();
+                            if (data.status === 'ready') {
+                                clearInterval(interval);
+                                document.getElementById('waiting-message').classList.add('hidden');
+                                const downloadArea = document.getElementById('download-area');
+                                const downloadButton = document.getElementById('download-button');
+                                const contactSection = document.getElementById('contact-section');
+                                const whatsappLink = document.getElementById('whatsapp-link');
+                                downloadButton.href = `${backendUrl}/download/${preferenceId}`;
+                                downloadArea.classList.remove('hidden');
+                                contactSection.classList.remove('hidden');
+                                const lastData = JSON.parse(localStorage.getItem('lastCalcData'));
+                                if(lastData) {
+                                    const results = calculateValues(lastData);
+                                    const irregularities = lastData.irregularities || [];
+                                    let message = `Olá, Dr. Mike! Gerei um cálculo no site e gostaria de tirar uma dúvida.\n\n*RESUMO DO CÁLCULO:*\n`;
+                                    Object.entries(results).forEach(([key, value]) => {
+                                        message += `*${key}:* ${formatCurrency(value)}\n`;
+                                    });
+                                    if (irregularities.length > 0) {
+                                        message += `\n*IRREGULARIDADES APONTADAS:*\n${irregularities.map(i => `- ${i}`).join('\n')}`;
+                                    }
+                                    const baseWhatsappUrl = whatsappLink.href.split('?')[0];
+                                    whatsappLink.href = `${baseWhatsappUrl}?text=${encodeURIComponent(message)}`;
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Erro ao verificar status:', error);
+                    }
+                }, 3000);
+            }
+
+            function setButtonLoading(button, isLoading) {
+                const textSpan = button.querySelector('span');
+                const spinner = button.querySelector('.spinner-btn');
+                button.disabled = isLoading;
+                if (isLoading) {
+                    textSpan.textContent = 'Aguarde...';
+                    spinner.classList.remove('hidden');
+                } else {
+                    if(button.id === 'calculate-button') textSpan.textContent = 'Ver Prévia do Cálculo';
+                    if(button.id === 'payment-button') textSpan.textContent = 'Pagar R$ 29,90 e Desbloquear';
+                    spinner.classList.add('hidden');
+                }
+            }
+
+            function formatCurrency(value) {
+                return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
+            }
+
+            function calculateValues(data) {
+                const salary = parseFloat(data['last-salary']) || 0;
+                const startDate = new Date(data['start-date'] + 'T00:00:00');
+                const endDate = new Date(data['end-date'] + 'T00:00:00');
+                if (isNaN(startDate) || isNaN(endDate) || endDate < startDate) return {};
+                const dailySalary = salary / 30;
+                const daysInLastMonth = endDate.getDate();
+                const saldoDeSalario = dailySalary * daysInLastMonth;
+                const totalMonths = ((endDate.getFullYear() - startDate.getFullYear()) * 12) + (endDate.getMonth() - startDate.getMonth()) + (endDate.getDate() >= startDate.getDate() ? 1 : 0);
+                const monthsFor13th = endDate.getDate() >= 15 ? endDate.getMonth() + 1 : endDate.getMonth();
+                const decimoTerceiroProporcional = (salary / 12) * monthsFor13th;
+                const numFeriasVencidas = parseInt(data['ferias-vencidas'], 10) || 0;
+                const feriasVencidas = salary * numFeriasVencidas;
+                const monthsForFerias = totalMonths % 12;
+                const feriasProporcionais = (salary / 12) * monthsForFerias;
+                const totalFerias = feriasProporcionais + feriasVencidas;
+                const tercoConstitucional = totalFerias / 3;
+                const avisoPrevioIndenizado = salary;
+                const estimatedFGTSTotal = (salary * 0.08) * totalMonths;
+                const multaFGTS = estimatedFGTSTotal * 0.40;
+                const totalGeral = saldoDeSalario + decimoTerceiroProporcional + totalFerias + tercoConstitucional + avisoPrevioIndenizado + multaFGTS;
+                return {
+                    'Saldo de Salário': saldoDeSalario, 'Aviso Prévio Indenizado': avisoPrevioIndenizado, '13º Salário Proporcional': decimoTerceiroProporcional,
+                    'Férias Vencidas': feriasVencidas, 'Férias Proporcionais': feriasProporcionais, '1/3 Constitucional sobre Férias': tercoConstitucional,
+                    'Multa de 40% do FGTS (Estimativa)': multaFGTS, 'TOTAL GERAL ESTIMADO': totalGeral
+                };
+            }
+        });
+    </script>
+</body>
+</html>

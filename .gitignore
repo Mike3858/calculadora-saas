@@ -1,0 +1,12 @@
+# Ignorar TOTALMENTE o ficheiro de segredos. NUNCA envie senhas para o GitHub.
+.env
+
+# Ignorar a pasta de módulos do Node. Ela é muito pesada e desnecessária.
+node_modules
+
+# Ignorar o banco de dados e os PDFs de teste.
+leads.db
+completed_pdfs/
+
+# Ignorar ficheiros de log, se existirem.
+npm-debug.log
