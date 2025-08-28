@@ -20,38 +20,38 @@ const EMAIL_USER = process.env.EMAIL_USER;
 const EMAIL_PASS = process.env.EMAIL_PASS;
 const EMAIL_FROM = process.env.EMAIL_FROM;
 
-// ==================== VERIFICAÇÃO ====================
-console.log('=== 🔧 CONFIGURAÇÃO DO SISTEMA ===');
-console.log('✅ Token MP presente:', MERCADOPAGO_ACCESS_TOKEN ? 'SIM' : 'NÃO');
-console.log('🌐 Site URL:', SITE_URL);
-console.log('🔔 Webhook URL:', WEBHOOK_URL);
+// ==================== VERIFICAÇÃO INICIAL ====================
+console.log('=== 🔧 INICIANDO SERVIDOR ===');
+console.log('✅ Porta: 3000');
+console.log('✅ Token MP:', MERCADOPAGO_ACCESS_TOKEN ? 'PRESENTE' : 'AUSENTE');
+console.log('✅ Site URL:', SITE_URL);
+console.log('✅ Webhook URL:', WEBHOOK_URL);
 
 if (!MERCADOPAGO_ACCESS_TOKEN) {
-    console.error('❌ ERRO: Token do Mercado Pago não configurado!');
-    console.error('💡 Configure a variável MERCADOPAGO_ACCESS_TOKEN no Portainer');
+    console.error('❌ ERRO CRÍTICO: Token não configurado!');
+    console.error('💡 Configure MERCADOPAGO_ACCESS_TOKEN no Portainer');
     process.exit(1);
 }
 
 // ==================== CLIENTE MERCADO PAGO ====================
+console.log('🔄 Configurando cliente Mercado Pago...');
 const client = new MercadoPagoConfig({ 
     accessToken: MERCADOPAGO_ACCESS_TOKEN,
-    options: {
-        timeout: 10000,
-        idempotencyKey: crypto.randomUUID()
-    }
+    options: { timeout: 15000 }
 });
 
-console.log('✅ Cliente Mercado Pago configurado com sucesso!');
+console.log('✅ Cliente Mercado Pago configurado!');
 
 const app = express();
 const port = 3000;
 
 // ==================== BANCO DE DADOS ====================
+console.log('🔄 Iniciando banco de dados...');
 const db = new sqlite3.Database('./leads.db', (err) => {
     if (err) {
-        console.error("❌ Erro ao abrir banco de dados:", err.message);
+        console.error('❌ Erro no banco:', err.message);
     } else {
-        console.log("✅ Conectado ao banco de dados SQLite.");
+        console.log('✅ Banco de dados conectado!');
         db.run(`CREATE TABLE IF NOT EXISTS leads (
             id INTEGER PRIMARY KEY AUTOINCREMENT, 
             name TEXT, 
@@ -70,7 +70,9 @@ const db = new sqlite3.Database('./leads.db', (err) => {
 });
 
 const COMPLETED_DIR = path.join(__dirname, 'completed_pdfs');
-fs.mkdir(COMPLETED_DIR, { recursive: true }).catch(console.error);
+fs.mkdir(COMPLETED_DIR, { recursive: true }).then(() => {
+    console.log('✅ Pasta de PDFs criada!');
+}).catch(console.error);
 
 // ==================== MIDDLEWARES ====================
 app.use(cors());
@@ -79,17 +81,18 @@ app.use(bodyParser.json());
 // ==================== ROTAS ====================
 app.post('/preview-calculation', (req, res) => {
     try {
-        console.log('📊 Calculando prévia...');
+        console.log('📊 Recebido cálculo preview');
         const results = calculateValues(req.body);
         res.json(results);
     } catch (error) {
-        console.error("❌ Erro no cálculo:", error);
-        res.status(500).json({ message: "Não foi possível calcular os valores." });
+        console.error('❌ Erro no preview:', error);
+        res.status(500).json({ error: 'Erro no cálculo' });
     }
 });
 
 app.post('/create-payment', async (req, res) => {
-    console.log('💰 Criando pagamento...');
+    console.log('💰 SOLICITAÇÃO DE PAGAMENTO RECEBIDA');
+    console.log('📧 Email do cliente:', req.body.email);
     
     try {
         const calculationData = req.body;
@@ -117,10 +120,15 @@ app.post('/create-payment', async (req, res) => {
         };
         
         console.log('🔄 Criando preferência no Mercado Pago...');
+        console.log('🔗 Site URL:', SITE_URL);
+        console.log('🔗 Webhook URL:', WEBHOOK_URL);
+        
         const preference = new Preference(client);
         const response = await preference.create({ body: preferenceBody });
         
-        console.log('✅ Preferência criada. ID:', response.id);
+        console.log('✅ PREFERÊNCIA CRIADA COM SUCESSO!');
+        console.log('📋 Preference ID:', response.id);
+        console.log('🔗 Init Point:', response.init_point);
         
         const dataString = JSON.stringify(calculationData);
         db.run(
@@ -128,26 +136,38 @@ app.post('/create-payment', async (req, res) => {
             [uniqueReference, response.id, dataString],
             function(err) {
                 if (err) {
-                    console.error("❌ Erro ao salvar no banco:", err.message);
-                    return res.status(500).json({ message: 'Erro interno.' });
+                    console.error('❌ Erro no banco:', err.message);
+                    return res.status(500).json({ error: 'Erro interno' });
                 }
                 
                 console.log('💾 Dados salvos. Referência:', uniqueReference);
+                
                 res.json({ 
+                    success: true,
                     init_point: response.init_point,
-                    sandbox_init_point: response.sandbox_init_point || response.init_point
+                    sandbox_init_point: response.sandbox_init_point || response.init_point,
+                    preference_id: response.id
                 });
             }
         );
         
     } catch (error) {
-        console.error('❌ Erro ao criar pagamento:', error);
-        res.status(500).json({ message: 'Erro ao processar pagamento.' });
+        console.error('❌ ERRO AO CRIAR PAGAMENTO:', error);
+        
+        // Debug detalhado do erro
+        if (error.cause) {
+            console.error('📋 Detalhes do erro:', JSON.stringify(error.cause, null, 2));
+        }
+        
+        res.status(500).json({ 
+            error: 'Erro ao criar pagamento',
+            details: error.message 
+        });
     }
 });
 
 app.post('/webhook', async (req, res) => {
-    console.log('📨 Webhook recebido');
+    console.log('📨 WEBHOOK RECEBIDO:', JSON.stringify(req.body, null, 2));
     
     try {
         const { type, data } = req.body;
@@ -160,8 +180,8 @@ app.post('/webhook', async (req, res) => {
             
             console.log('📊 Status do pagamento:', paymentDetails.status);
             
-            if (paymentDetails.status === 'approved' && paymentDetails.external_reference) {
-                console.log('✅ Pagamento aprovado! Referência:', paymentDetails.external_reference);
+            if (paymentDetails.status === 'approved') {
+                console.log('✅ PAGAMENTO APROVADO!');
                 await processApprovedPayment(paymentDetails.external_reference, paymentDetails);
             }
         }
@@ -169,13 +189,18 @@ app.post('/webhook', async (req, res) => {
         res.status(200).send('OK');
         
     } catch (error) {
-        console.error('❌ Erro no webhook:', error);
+        console.error('❌ ERRO NO WEBHOOK:', error);
         res.status(500).send('Erro');
     }
 });
 
 async function processApprovedPayment(externalReference, paymentDetails) {
     return new Promise((resolve, reject) => {
+        if (!externalReference) {
+            console.log('⚠️ Sem external reference');
+            return resolve();
+        }
+        
         db.get(
             `SELECT data, mp_preference_id FROM pending_calculations WHERE reference_id = ?`,
             [externalReference],
@@ -193,32 +218,21 @@ async function processApprovedPayment(externalReference, paymentDetails) {
                 try {
                     const calcData = JSON.parse(row.data);
                     
+                    // Salvar lead
                     db.run(
                         `INSERT INTO leads (name, email, whatsapp) VALUES (?, ?, ?)`,
-                        [calcData.name, calcData.email, calcData.whatsapp],
-                        (err) => {
-                            if (err) console.error('❌ Erro ao salvar lead:', err);
-                            else console.log('👤 Lead salvo com sucesso');
-                        }
+                        [calcData.name, calcData.email, calcData.whatsapp]
                     );
                     
+                    // Gerar PDF
                     const pdfBuffer = await generatePDF(calcData);
                     const pdfPath = path.join(COMPLETED_DIR, `${row.mp_preference_id}.pdf`);
                     await fs.writeFile(pdfPath, pdfBuffer);
-                    console.log('📄 PDF salvo:', pdfPath);
                     
-                    if (EMAIL_HOST && EMAIL_USER && EMAIL_PASS) {
-                        await sendCalculationEmail(calcData, pdfBuffer);
-                    }
+                    console.log('📄 PDF gerado:', pdfPath);
                     
-                    db.run(
-                        `DELETE FROM pending_calculations WHERE reference_id = ?`, 
-                        [externalReference],
-                        (err) => {
-                            if (err) console.error('❌ Erro ao limpar pendência:', err);
-                            else console.log('🧹 Pendência removida');
-                        }
-                    );
+                    // Limpar pendência
+                    db.run(`DELETE FROM pending_calculations WHERE reference_id = ?`, [externalReference]);
                     
                     resolve();
                     
@@ -255,7 +269,9 @@ function calculateValues(data) {
     const salary = parseFloat(data['last-salary']) || 0;
     const startDate = new Date(data['start-date'] + 'T00:00:00');
     const endDate = new Date(data['end-date'] + 'T00:00:00');
+    
     if (isNaN(startDate) || isNaN(endDate) || endDate < startDate) return {};
+    
     const dailySalary = salary / 30;
     const daysInLastMonth = endDate.getDate();
     const saldoDeSalario = dailySalary * daysInLastMonth;
@@ -272,10 +288,16 @@ function calculateValues(data) {
     const estimatedFGTSTotal = (salary * 0.08) * totalMonths;
     const multaFGTS = estimatedFGTSTotal * 0.40;
     const totalGeral = saldoDeSalario + decimoTerceiroProporcional + totalFerias + tercoConstitucional + avisoPrevioIndenizado + multaFGTS;
+    
     return {
-        'Saldo de Salário': saldoDeSalario, 'Aviso Prévio Indenizado': avisoPrevioIndenizado, '13º Salário Proporcional': decimoTerceiroProporcional,
-        'Férias Vencidas': feriasVencidas, 'Férias Proporcionais': feriasProporcionais, '1/3 Constitucional sobre Férias': tercoConstitucional,
-        'Multa de 40% do FGTS (Estimativa)': multaFGTS, 'TOTAL GERAL ESTIMADO': totalGeral
+        'Saldo de Salário': saldoDeSalario,
+        'Aviso Prévio Indenizado': avisoPrevioIndenizado,
+        '13º Salário Proporcional': decimoTerceiroProporcional,
+        'Férias Vencidas': feriasVencidas,
+        'Férias Proporcionais': feriasProporcionais,
+        '1/3 Constitucional sobre Férias': tercoConstitucional,
+        'Multa de 40% do FGTS (Estimativa)': multaFGTS,
+        'TOTAL GERAL ESTIMADO': totalGeral
     };
 }
 
@@ -283,32 +305,47 @@ async function generatePDF(data) {
     const calculationResults = calculateValues(data);
     const irregularities = data.irregularities || [];
     const doc = new jsPDF();
+    
     doc.setFontSize(10);
     doc.text(`Cálculo para: ${data.name || 'Não informado'}`, 14, 15);
     doc.text(`E-mail: ${data.email}`, 14, 20);
     doc.text(`WhatsApp: ${data.whatsapp || 'Não informado'}`, 14, 25);
+    
     doc.setFontSize(16);
     doc.text('Cálculo Detalhado de Rescisão Indireta', 105, 35, null, null, 'center');
+    
     const tableColumn = ["Verba", "Valor (R$)"];
     const tableRows = [];
+    
     Object.entries(calculationResults).forEach(([key, value]) => {
-        if (value > 0 && key !== 'TOTAL GERAL ESTIMADO') {
+        if (value > 0) {
             tableRows.push([key, new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)]);
         }
     });
-    tableRows.push(['TOTAL GERAL ESTIMADO', new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(calculationResults['TOTAL GERAL ESTIMADO'])]);
-    doc.autoTable({ head: [tableColumn], body: tableRows, startY: 40, theme: 'striped',
+    
+    doc.autoTable({
+        head: [tableColumn],
+        body: tableRows,
+        startY: 40,
+        theme: 'striped',
         didDrawCell: (data) => {
-            if (data.row.index === tableRows.length - 1) doc.setFont(undefined, 'bold');
+            if (data.row.index === tableRows.length - 1) {
+                doc.setFont(undefined, 'bold');
+            }
         }
     });
-    let finalY = doc.lastAutoTable.finalY;
+    
+    let finalY = doc.lastAutoTable.finalY + 10;
+    
     if (irregularities.length > 0) {
         doc.setFontSize(12);
-        doc.text('Irregularidades Apontadas:', 14, finalY + 10);
+        doc.text('Irregularidades Apontadas:', 14, finalY);
         doc.setFontSize(10);
-        doc.text(irregularities.map(item => `- ${item}`).join('\n'), 14, finalY + 16);
+        irregularities.forEach((item, index) => {
+            doc.text(`- ${item}`, 14, finalY + 5 + (index * 5));
+        });
     }
+    
     return doc.output('arraybuffer');
 }
 
@@ -317,6 +354,7 @@ async function sendCalculationEmail(data, pdfBuffer) {
         console.log("📧 Email não configurado. Pulando envio.");
         return;
     }
+    
     const transporter = nodemailer.createTransport({
         host: EMAIL_HOST, 
         port: EMAIL_PORT, 
@@ -326,18 +364,24 @@ async function sendCalculationEmail(data, pdfBuffer) {
             pass: EMAIL_PASS 
         }
     });
+    
     try {
         await transporter.sendMail({
             from: EMAIL_FROM, 
             to: data.email, 
             subject: 'Seu Cálculo de Rescisão Trabalhista está Pronto!',
-            html: `<p>Olá, ${data.name || 'Cliente'}!</p><p>Obrigado por utilizar nossa calculadora. Seu cálculo detalhado e desbloqueado está em anexo.</p><p>Atenciosamente,<br>Equipe da Calculadora</p>`,
+            html: `
+                <p>Olá, ${data.name || 'Cliente'}!</p>
+                <p>Obrigado por utilizar nossa calculadora. Seu cálculo detalhado e desbloqueado está em anexo.</p>
+                <p>Atenciosamente,<br>Equipe da Calculadora</p>
+            `,
             attachments: [{ 
                 filename: 'calculo-rescisao-detalhado.pdf', 
-                content: Buffer.from(pdfBuffer), 
+                content: pdfBuffer, 
                 contentType: 'application/pdf' 
             }]
         });
+        
         console.log('✅ Email enviado para:', data.email);
     } catch (error) {
         console.error('❌ Erro ao enviar email:', error);
@@ -346,8 +390,20 @@ async function sendCalculationEmail(data, pdfBuffer) {
 
 // ==================== INICIAR SERVIDOR ====================
 app.listen(port, () => {
-    console.log(`🚀 Servidor rodando na porta ${port}`);
-    console.log(`✅ Token configurado: ${MERCADOPAGO_ACCESS_TOKEN ? 'SIM' : 'NÃO'}`);
-    console.log(`🌐 Site: ${SITE_URL}`);
-    console.log(`🔔 Webhook: ${WEBHOOK_URL}`);
+    console.log('=========================================');
+    console.log('🚀 SERVIDOR INICIADO COM SUCESSO!');
+    console.log('📍 Porta:', port);
+    console.log('🌐 URL:', SITE_URL);
+    console.log('🔗 Webhook:', WEBHOOK_URL);
+    console.log('✅ Token MP:', MERCADOPAGO_ACCESS_TOKEN ? 'CONFIGURADO' : 'AUSENTE');
+    console.log('=========================================');
+});
+
+// ==================== TRATAMENTO DE ERROS ====================
+process.on('unhandledRejection', (error) => {
+    console.error('❌ Erro não tratado:', error);
+});
+
+process.on('uncaughtException', (error) => {
+    console.error('❌ Exceção não capturada:', error);
 });
