@@ -1,7 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
-const mercadopago = require('mercadopago');  // ← MUDEI PARA VERSÃO 1.x
+const mercadopago = require('mercadopago');
 const { jsPDF } = require('jspdf');
 require('jspdf-autotable');
 const fs = require('fs').promises;
@@ -33,11 +33,11 @@ if (!MERCADOPAGO_ACCESS_TOKEN) {
     process.exit(1);
 }
 
-// ==================== CONFIGURAÇÃO MERCADO PAGO (VERSÃO 1.x) ====================
+// ==================== CONFIGURAÇÃO MERCADO PAGO ====================
 console.log('🔄 Configurando Mercado Pago...');
 mercadopago.configure({
     access_token: MERCADOPAGO_ACCESS_TOKEN,
-    sandbox: true,  // ← ISSO AQUI RESOLVE O PROBLEMA!
+    sandbox: true,
     timeout: 15000
 });
 console.log('✅ Mercado Pago configurado!');
@@ -97,6 +97,7 @@ app.post('/create-payment', async (req, res) => {
         const calculationData = req.body;
         const uniqueReference = crypto.randomUUID();
         
+        // ✅ CONFIGURAÇÃO CORRIGIDA - SEM auto_return
         const preference = {
             items: [{ 
                 title: 'Cálculo de Rescisão Trabalhista Detalhado', 
@@ -109,18 +110,16 @@ app.post('/create-payment', async (req, res) => {
                 name: calculationData.name || 'Cliente'
             },
             back_urls: { 
-                success: `${SITE_URL}?status=approved&preference_id={preference_id}`,
-                failure: `${SITE_URL}?status=failure`,
-                pending: `${SITE_URL}?status=pending`
+                success: 'https://www.mercadopago.com.br',
+                failure: 'https://www.google.com',
+                pending: 'https://www.github.com'
             },
-            auto_return: 'approved',
             notification_url: WEBHOOK_URL,
             external_reference: uniqueReference
         };
         
         console.log('🔄 Criando preferência no Mercado Pago...');
         
-        // ← MUDANÇA AQUI: usando mercadopago diretamente
         const response = await mercadopago.preferences.create(preference);
         
         console.log('✅ PREFERÊNCIA CRIADA COM SUCESSO!');
@@ -140,9 +139,7 @@ app.post('/create-payment', async (req, res) => {
                 
                 res.json({ 
                     success: true,
-                    init_point: response.body.init_point,
-                    sandbox_init_point: response.body.sandbox_init_point || response.body.init_point,
-                    preference_id: response.body.id
+                    payment_url: response.body.init_point // ✅ LINK DIRETO
                 });
             }
         );
@@ -166,7 +163,6 @@ app.post('/webhook', async (req, res) => {
         if (type === 'payment' && data?.id) {
             console.log('💳 Processando pagamento ID:', data.id);
             
-            // ← MUDANÇA AQUI: usando mercadopago diretamente
             const paymentDetails = await mercadopago.payment.get(data.id);
             
             console.log('📊 Status do pagamento:', paymentDetails.body.status);
