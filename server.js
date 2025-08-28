@@ -1,7 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
-const { MercadoPagoConfig, Preference, Payment } = require('mercadopago');
+const mercadopago = require('mercadopago');  // ← MUDEI PARA VERSÃO 1.x
 const { jsPDF } = require('jspdf');
 require('jspdf-autotable');
 const fs = require('fs').promises;
@@ -33,14 +33,14 @@ if (!MERCADOPAGO_ACCESS_TOKEN) {
     process.exit(1);
 }
 
-// ==================== CLIENTE MERCADO PAGO ====================
-console.log('🔄 Configurando cliente Mercado Pago...');
-const client = new MercadoPagoConfig({ 
-    accessToken: MERCADOPAGO_ACCESS_TOKEN,
-    options: { timeout: 15000 }
+// ==================== CONFIGURAÇÃO MERCADO PAGO (VERSÃO 1.x) ====================
+console.log('🔄 Configurando Mercado Pago...');
+mercadopago.configure({
+    access_token: MERCADOPAGO_ACCESS_TOKEN,
+    sandbox: true,  // ← ISSO AQUI RESOLVE O PROBLEMA!
+    timeout: 15000
 });
-
-console.log('✅ Cliente Mercado Pago configurado!');
+console.log('✅ Mercado Pago configurado!');
 
 const app = express();
 const port = 3000;
@@ -97,7 +97,7 @@ app.post('/create-payment', async (req, res) => {
         const calculationData = req.body;
         const uniqueReference = crypto.randomUUID();
         
-        const preferenceBody = {
+        const preference = {
             items: [{ 
                 title: 'Cálculo de Rescisão Trabalhista Detalhado', 
                 quantity: 1, 
@@ -120,16 +120,16 @@ app.post('/create-payment', async (req, res) => {
         
         console.log('🔄 Criando preferência no Mercado Pago...');
         
-        const preference = new Preference(client);
-        const response = await preference.create({ body: preferenceBody });
+        // ← MUDANÇA AQUI: usando mercadopago diretamente
+        const response = await mercadopago.preferences.create(preference);
         
         console.log('✅ PREFERÊNCIA CRIADA COM SUCESSO!');
-        console.log('📋 Preference ID:', response.id);
+        console.log('📋 Preference ID:', response.body.id);
         
         const dataString = JSON.stringify(calculationData);
         db.run(
             `INSERT INTO pending_calculations (reference_id, mp_preference_id, data) VALUES (?, ?, ?)`, 
-            [uniqueReference, response.id, dataString],
+            [uniqueReference, response.body.id, dataString],
             function(err) {
                 if (err) {
                     console.error('❌ Erro no banco:', err.message);
@@ -140,9 +140,9 @@ app.post('/create-payment', async (req, res) => {
                 
                 res.json({ 
                     success: true,
-                    init_point: response.init_point,
-                    sandbox_init_point: response.sandbox_init_point || response.init_point,
-                    preference_id: response.id
+                    init_point: response.body.init_point,
+                    sandbox_init_point: response.body.sandbox_init_point || response.body.init_point,
+                    preference_id: response.body.id
                 });
             }
         );
@@ -166,14 +166,14 @@ app.post('/webhook', async (req, res) => {
         if (type === 'payment' && data?.id) {
             console.log('💳 Processando pagamento ID:', data.id);
             
-            const payment = new Payment(client);
-            const paymentDetails = await payment.get({ id: data.id });
+            // ← MUDANÇA AQUI: usando mercadopago diretamente
+            const paymentDetails = await mercadopago.payment.get(data.id);
             
-            console.log('📊 Status do pagamento:', paymentDetails.status);
+            console.log('📊 Status do pagamento:', paymentDetails.body.status);
             
-            if (paymentDetails.status === 'approved' && paymentDetails.external_reference) {
+            if (paymentDetails.body.status === 'approved' && paymentDetails.body.external_reference) {
                 console.log('✅ PAGAMENTO APROVADO!');
-                await processApprovedPayment(paymentDetails.external_reference, paymentDetails);
+                await processApprovedPayment(paymentDetails.body.external_reference, paymentDetails.body);
             }
         }
         
