@@ -6,23 +6,29 @@ services:
       context: .
     container_name: calculadora-saas
     restart: unless-stopped
-    # Aponta para a pasta /srv/ para evitar problemas de permissão
+
+    # A SOLUÇÃO FINAL PARA O ERRO DO BANCO DE DADOS:
+    # Dizemos ao Docker para criar e gerir um "cofre" seguro chamado 'calculadora-dados'
+    # e ligá-lo à pasta inteira da aplicação. Isto resolve todos os problemas de permissão.
     volumes:
-      - /srv/calculadora-data/leads.db:/app/leads.db
-      - /srv/calculadora-data/completed_pdfs:/app/completed_pdfs
+      - calculadora-dados:/app
+
+    # As etiquetas do Traefik que já estão corretas
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.calculadora-secure.rule=Host(`calculotrabalhista.mbbaj.adv.br`)"
-      # Prioridade alta para vencer o WordPress
       - "traefik.http.routers.calculadora-secure.priority=200"
       - "traefik.http.routers.calculadora-secure.entrypoints=websecure"
       - "traefik.http.routers.calculadora-secure.tls=true"
-      # Nome correto do gerador de certificados
       - "traefik.http.routers.calculadora-secure.tls.certresolver=leresolver"
       - "traefik.http.routers.calculadora-secure.service=calculadora-service"
       - "traefik.http.services.calculadora-service.loadbalancer.server.port=3000"
     networks:
       - calculadora
+
+# Aqui, informamos ao Docker que ele precisa de criar e gerir o nosso "cofre" de dados
+volumes:
+  calculadora-dados:
 
 networks:
   calculadora:
