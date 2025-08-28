@@ -1,34 +1,50 @@
 version: '3.8'
 
 services:
+  # Define o serviço da sua aplicação
   calculadora-app:
+    # --- Construção ---
+    # Instrução para o Portainer construir a imagem a partir do código do GitHub.
+    # O "." significa "usar o Dockerfile que está nesta mesma pasta".
     build:
       context: .
+
+    # --- Configuração do Contêiner ---
     container_name: calculadora-saas
     restart: unless-stopped
 
-    # A MUDANÇA CRÍTICA ESTÁ AQUI:
-    # Em vez de apontar para uma pasta específica na VPS,
-    # dizemos ao Docker para usar o "cofre" chamado 'calculadora-storage'
-    # e conectá-lo à pasta /app inteira dentro do contêiner.
+    # --- Armazenamento Permanente (Volumes) ---
+    # Aponta para a pasta /srv/ para evitar os problemas de permissão que tivemos.
+    # Garante que o banco de dados e os PDFs não se percam.
     volumes:
-      - calculadora-storage:/app
+      - /srv/calculadora-data/leads.db:/app/leads.db
+      - /srv/calculadora-data/completed_pdfs:/app/completed_pdfs
 
+    # --- Regras para o Traefik (O "Porteiro") ---
+    # Este conjunto de etiquetas ensina o Traefik a encontrar e servir sua aplicação.
     labels:
       - "traefik.enable=true"
+      # A regra que associa o seu domínio a este contêiner.
       - "traefik.http.routers.calculadora-secure.rule=Host(`calculotrabalhista.mbbaj.adv.br`)"
+      # Define que este serviço deve ter prioridade máxima para evitar conflitos com o WordPress.
+      - "traefik.http.routers.calculadora-secure.priority=200"
+      # Diz ao Traefik para usar a porta segura (HTTPS).
       - "traefik.http.routers.calculadora-secure.entrypoints=websecure"
+      # Ativa o SSL (o cadeado https).
       - "traefik.http.routers.calculadora-secure.tls=true"
+      # CORREÇÃO FINAL: Usa o nome correto do seu gerador de certificados ('leresolver' em vez de 'letsencrypt').
       - "traefik.http.routers.calculadora-secure.tls.certresolver=leresolver"
+      # Associa este "router" a um "serviço" interno do Traefik.
       - "traefik.http.routers.calculadora-secure.service=calculadora-service"
+      # Diz ao Traefik que a sua aplicação, dentro do contêiner, está a ouvir na porta 3000.
       - "traefik.http.services.calculadora-service.loadbalancer.server.port=3000"
+
+    # --- Conexão de Rede ---
+    # Conecta a aplicação à rede 'calculadora' para que o Traefik a possa encontrar.
     networks:
       - calculadora
 
-# Aqui declaramos o nosso "cofre" gerido pelo Docker
-volumes:
-  calculadora-storage:
-
+# Declaração das redes externas que o nosso serviço usa.
 networks:
   calculadora:
     external: true
