@@ -1,12 +1,30 @@
-# Ignorar TOTALMENTE o ficheiro de segredos. NUNCA envie senhas para o GitHub.
+# Mercado Pago e dados sensíveis
 .env
+*.env*
+acme.json
 
-# Ignorar a pasta de módulos do Node. Ela é muito pesada e desnecessária.
-node_modules
-
-# Ignorar o banco de dados e os PDFs de teste.
+# Banco de dados
 leads.db
-completed_pdfs/
+*.db
+*.sqlite
+*.sqlite3
 
-# Ignorar ficheiros de log, se existirem.
-npm-debug.log
+# PDFs gerados
+completed_pdfs/
+*.pdf
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Logs
+logs
+*.log
+
+# Sistema
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

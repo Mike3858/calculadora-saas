@@ -1,32 +1,54 @@
 version: '3.8'
 
 services:
+  traefik:
+    image: traefik:v2.10
+    container_name: traefik
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.letsencrypt.acme.email=seu-email@dominio.com
+      - --certificatesresolvers.letsencrypt.acme.storage=/acme.json
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./acme.json:/acme.json
+    networks:
+      - calculadora
+    labels:
+      - "traefik.enable=true"
+
   calculadora-app:
     build:
       context: .
     container_name: calculadora-saas
     restart: unless-stopped
-
-    # A SOLUÇÃO FINAL PARA O ERRO DO BANCO DE DADOS:
-    # Dizemos ao Docker para criar e gerir um "cofre" seguro chamado 'calculadora-dados'
-    # e ligá-lo à pasta inteira da aplicação. Isto resolve todos os problemas de permissão.
     volumes:
       - calculadora-dados:/app
-
-    # As etiquetas do Traefik que já estão corretas
     labels:
       - "traefik.enable=true"
+      - "traefik.http.routers.calculadora-http.rule=Host(`calculotrabalhista.mbbaj.adv.br`)"
+      - "traefik.http.routers.calculadora-http.entrypoints=web"
+      - "traefik.http.routers.calculadora-http.middlewares=https-redirect"
       - "traefik.http.routers.calculadora-secure.rule=Host(`calculotrabalhista.mbbaj.adv.br`)"
       - "traefik.http.routers.calculadora-secure.priority=200"
       - "traefik.http.routers.calculadora-secure.entrypoints=websecure"
       - "traefik.http.routers.calculadora-secure.tls=true"
-      - "traefik.http.routers.calculadora-secure.tls.certresolver=leresolver"
+      - "traefik.http.routers.calculadora-secure.tls.certresolver=letsencrypt"
       - "traefik.http.routers.calculadora-secure.service=calculadora-service"
       - "traefik.http.services.calculadora-service.loadbalancer.server.port=3000"
+      - "traefik.http.middlewares.https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.https-redirect.redirectscheme.permanent=true"
     networks:
       - calculadora
+    depends_on:
+      - traefik
 
-# Aqui, informamos ao Docker que ele precisa de criar e gerir o nosso "cofre" de dados
 volumes:
   calculadora-dados:
 

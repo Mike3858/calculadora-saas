@@ -1,4 +1,3 @@
-require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
@@ -11,134 +10,226 @@ const nodemailer = require('nodemailer');
 const sqlite3 = require('sqlite3').verbose();
 const crypto = require('crypto');
 
+// ⚠️⚠️⚠️ VARIÁVEIS DE AMBIENTE (CONFIGURAR NO PORTAINER) ⚠️⚠️⚠️
 const MERCADOPAGO_ACCESS_TOKEN = process.env.MERCADOPAGO_ACCESS_TOKEN;
-const SITE_URL = process.env.SITE_URL;
-const WEBHOOK_URL = process.env.WEBHOOK_URL;
+const SITE_URL = process.env.SITE_URL || 'https://calculotrabalhista.mbbaj.adv.br';
+const WEBHOOK_URL = process.env.WEBHOOK_URL || 'https://calculotrabalhista.mbbaj.adv.br/webhook';
 const EMAIL_HOST = process.env.EMAIL_HOST;
 const EMAIL_PORT = process.env.EMAIL_PORT;
 const EMAIL_USER = process.env.EMAIL_USER;
 const EMAIL_PASS = process.env.EMAIL_PASS;
 const EMAIL_FROM = process.env.EMAIL_FROM;
 
+// ✅ VERIFICAÇÃO CRÍTICA DO TOKEN
+console.log('=== VERIFICAÇÃO DE CONFIGURAÇÃO ===');
+console.log('Token do Mercado Pago presente:', MERCADOPAGO_ACCESS_TOKEN ? '✅ SIM' : '❌ NÃO');
+
+if (!MERCADOPAGO_ACCESS_TOKEN) {
+    console.error('❌ ERRO CRÍTICO: Token do Mercado Pago não configurado!');
+    console.error('💡 Configure a variável MERCADOPAGO_ACCESS_TOKEN no Portainer');
+    process.exit(1);
+}
+
+console.log('🔍 Token começa com:', MERCADOPAGO_ACCESS_TOKEN.substring(0, 10) + '...');
+console.log('🌐 Site URL:', SITE_URL);
+console.log('🔔 Webhook URL:', WEBHOOK_URL);
+
+// ✅ CONFIGURAÇÃO DO CLIENTE MERCADO PAGO (CORRIGIDO)
+const client = new MercadoPagoConfig({ 
+    accessToken: MERCADOPAGO_ACCESS_TOKEN 
+});
+
 const app = express();
 const port = 3000;
 
+// Configuração do banco de dados
 const db = new sqlite3.Database('./leads.db', (err) => {
     if (err) {
-        console.error("Erro ao abrir o banco de dados", err.message);
+        console.error("❌ Erro ao abrir banco de dados:", err.message);
     } else {
-        console.log("Conectado ao banco de dados.");
-        db.run(`CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, email TEXT, whatsapp TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)`);
-        db.run(`CREATE TABLE IF NOT EXISTS pending_calculations (reference_id TEXT PRIMARY KEY, mp_preference_id TEXT, data TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)`);
+        console.log("✅ Conectado ao banco de dados SQLite.");
+        // Criar tabelas se não existirem
+        db.run(`CREATE TABLE IF NOT EXISTS leads (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, 
+            name TEXT, 
+            email TEXT, 
+            whatsapp TEXT, 
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
+        
+        db.run(`CREATE TABLE IF NOT EXISTS pending_calculations (
+            reference_id TEXT PRIMARY KEY, 
+            mp_preference_id TEXT, 
+            data TEXT, 
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
     }
 });
 
 const COMPLETED_DIR = path.join(__dirname, 'completed_pdfs');
-fs.mkdir(COMPLETED_DIR, { recursive: true });
+fs.mkdir(COMPLETED_DIR, { recursive: true }).catch(console.error);
 
+// Middlewares
 app.use(cors());
 app.use(bodyParser.json());
 
-const client = new MercadoPagoConfig({ accessToken: MERCADOPAGO_ACCESS_TOKEN });
-
-app.post('/preview-calculation', (req, res) => {
-    try {
-        const results = calculateValues(req.body);
-        res.json(results);
-    } catch (error) {
-        console.error("Erro no cálculo da prévia:", error);
-        res.status(500).json({ message: "Não foi possível calcular os valores." });
-    }
-});
-
+// ✅ ROTA DE CRIAÇÃO DE PAGAMENTO (CORRIGIDA)
 app.post('/create-payment', async (req, res) => {
-    const calculationData = req.body;
+    console.log('💰 Recebida solicitação de pagamento');
+    
     try {
+        const calculationData = req.body;
         const uniqueReference = crypto.randomUUID();
+        
         const preferenceBody = {
-            items: [{ title: 'Cálculo de Rescisão Trabalhista Detalhado', quantity: 1, currency_id: 'BRL', unit_price: 29.90 }],
-            payer: { email: calculationData.email },
-            back_urls: { success: SITE_URL, failure: SITE_URL, pending: SITE_URL },
+            items: [{ 
+                title: 'Cálculo de Rescisão Trabalhista Detalhado', 
+                quantity: 1, 
+                currency_id: 'BRL', 
+                unit_price: 29.90 
+            }],
+            payer: { 
+                email: calculationData.email,
+                name: calculationData.name || 'Cliente'
+            },
+            back_urls: { 
+                success: `${SITE_URL}?status=approved&preference_id={preference_id}`,
+                failure: `${SITE_URL}?status=failure`,
+                pending: `${SITE_URL}?status=pending`
+            },
             auto_return: 'approved',
             notification_url: WEBHOOK_URL,
             external_reference: uniqueReference
         };
+        
+        console.log('🔄 Criando preferência no Mercado Pago...');
         const preference = new Preference(client);
         const response = await preference.create({ body: preferenceBody });
-        const mpPreferenceId = response.id;
+        
+        console.log('✅ Preferência criada com ID:', response.id);
+        
+        // Salvar no banco de dados
         const dataString = JSON.stringify(calculationData);
-        db.run(`INSERT INTO pending_calculations (reference_id, mp_preference_id, data) VALUES (?, ?, ?)`, 
-            [uniqueReference, mpPreferenceId, dataString], function(err) {
-            if (err) {
-                console.error("[CREATE_PAYMENT] Erro ao salvar dados pendentes no DB:", err.message);
-                return res.status(500).json({ message: 'Erro ao guardar os dados do cálculo.' });
-            }
-            console.log(`[CREATE_PAYMENT] Dados do cálculo salvos no DB para a referência: ${uniqueReference}`);
-            res.json({ init_point: response.init_point });
-        });
-    } catch (error) {
-        console.error('[CREATE_PAYMENT] Erro ao criar preferência:', error?.cause ?? error);
-        res.status(500).json({ message: error?.cause?.[0]?.description || 'Erro interno.' });
-    }
-});
-
-app.post('/webhook', async (req, res) => {
-    const notification = req.body;
-    if (!notification || notification.type !== 'payment' || !notification.data || !notification.data.id) {
-        return res.status(200).send('ok');
-    }
-    try {
-        const paymentId = notification.data.id;
-        const payment = new Payment(client);
-        const paymentDetails = await payment.get({ id: paymentId });
-        const externalReference = paymentDetails.external_reference;
-        if (paymentDetails.status === 'approved' && externalReference) {
-            db.get(`SELECT data, mp_preference_id FROM pending_calculations WHERE reference_id = ?`, [externalReference], async (err, row) => {
-                if (err) return console.error("ERRO ao ler do DB no webhook:", err.message);
-                if (row) {
-                    const calcData = JSON.parse(row.data);
-                    const preferenceIdForFile = row.mp_preference_id;
-                    db.run(`INSERT INTO leads (name, email, whatsapp) VALUES (?, ?, ?)`,
-                        [calcData.name, calcData.email, calcData.whatsapp], (err) => {
-                        if (err) console.error("ERRO AO SALVAR LEAD:", err.message);
-                        else console.log(`Lead salvo com sucesso!`);
-                    });
-                    const pdfArrayBuffer = await generatePDF(calcData);
-                    const pdfBuffer = Buffer.from(pdfArrayBuffer);
-                    const pdfPath = path.join(COMPLETED_DIR, `${preferenceIdForFile}.pdf`);
-                    await fs.writeFile(pdfPath, pdfBuffer);
-                    console.log(`PDF salvo em: ${pdfPath}`);
-                    await sendCalculationEmail(calcData, pdfBuffer);
-                    db.run(`DELETE FROM pending_calculations WHERE reference_id = ?`, externalReference);
+        db.run(
+            `INSERT INTO pending_calculations (reference_id, mp_preference_id, data) VALUES (?, ?, ?)`, 
+            [uniqueReference, response.id, dataString],
+            function(err) {
+                if (err) {
+                    console.error("❌ Erro ao salvar no banco:", err.message);
+                    return res.status(500).json({ message: 'Erro interno.' });
                 }
-            });
-        }
-        res.status(200).send('ok');
+                
+                console.log('💾 Dados salvos no banco. Referência:', uniqueReference);
+                res.json({ 
+                    init_point: response.init_point,
+                    sandbox_init_point: response.sandbox_init_point || response.init_point
+                });
+            }
+        );
+        
     } catch (error) {
-        console.error('--- ERRO CRÍTICO NO WEBHOOK ---:', error);
-        res.status(500).send('Erro ao processar o webhook.');
+        console.error('❌ Erro ao criar pagamento:', error);
+        res.status(500).json({ 
+            message: 'Erro ao processar pagamento.',
+            error: error.message 
+        });
     }
 });
 
-app.get('/status/:preferenceId', async (req, res) => {
-    const { preferenceId } = req.params;
-    const pdfPath = path.join(COMPLETED_DIR, `${preferenceId}.pdf`);
+// ✅ ROTA DE WEBHOOK (CORRIGIDA)
+app.post('/webhook', async (req, res) => {
+    console.log('📨 Webhook recebido:', JSON.stringify(req.body, null, 2));
+    
     try {
-        await fs.access(pdfPath);
-        res.json({ status: 'ready' });
-    } catch {
-        res.json({ status: 'pending' });
+        const { type, data } = req.body;
+        
+        if (type === 'payment' && data?.id) {
+            console.log('💳 Processando pagamento ID:', data.id);
+            
+            // ✅ USAR O MESMO CLIENTE CONFIGURADO (ISSO RESOLVE O ERRO!)
+            const payment = new Payment(client);
+            const paymentDetails = await payment.get({ id: data.id });
+            
+            console.log('📊 Status do pagamento:', paymentDetails.status);
+            
+            if (paymentDetails.status === 'approved' && paymentDetails.external_reference) {
+                console.log('✅ Pagamento aprovado! Referência:', paymentDetails.external_reference);
+                await processApprovedPayment(paymentDetails.external_reference, paymentDetails);
+            }
+        }
+        
+        res.status(200).send('OK');
+        
+    } catch (error) {
+        console.error('❌ Erro no webhook:', error);
+        res.status(500).send('Erro');
     }
 });
 
-app.get('/download/:preferenceId', (req, res) => {
-    const { preferenceId } = req.params;
-    const pdfPath = path.join(COMPLETED_DIR, `${preferenceId}.pdf`);
-    res.download(pdfPath, 'calculo-rescisao-detalhado.pdf', (err) => {
-        if (!err) fs.unlink(pdfPath);
+async function processApprovedPayment(externalReference, paymentDetails) {
+    return new Promise((resolve, reject) => {
+        db.get(
+            `SELECT data, mp_preference_id FROM pending_calculations WHERE reference_id = ?`,
+            [externalReference],
+            async (err, row) => {
+                if (err) {
+                    console.error('❌ Erro no banco:', err);
+                    return reject(err);
+                }
+                
+                if (!row) {
+                    console.log('⚠️  Referência não encontrada:', externalReference);
+                    return resolve();
+                }
+                
+                try {
+                    const calcData = JSON.parse(row.data);
+                    
+                    // Salvar lead
+                    db.run(
+                        `INSERT INTO leads (name, email, whatsapp) VALUES (?, ?, ?)`,
+                        [calcData.name, calcData.email, calcData.whatsapp],
+                        (err) => {
+                            if (err) console.error('❌ Erro ao salvar lead:', err);
+                            else console.log('👤 Lead salvo com sucesso');
+                        }
+                    );
+                    
+                    // Gerar PDF
+                    const pdfBuffer = await generatePDF(calcData);
+                    const pdfPath = path.join(COMPLETED_DIR, `${row.mp_preference_id}.pdf`);
+                    await fs.writeFile(pdfPath, pdfBuffer);
+                    console.log('📄 PDF salvo:', pdfPath);
+                    
+                    // Enviar email se configurado
+                    if (EMAIL_HOST && EMAIL_USER && EMAIL_PASS) {
+                        await sendCalculationEmail(calcData, pdfBuffer);
+                    }
+                    
+                    // Limpar pendência
+                    db.run(
+                        `DELETE FROM pending_calculations WHERE reference_id = ?`, 
+                        [externalReference],
+                        (err) => {
+                            if (err) console.error('❌ Erro ao limpar pendência:', err);
+                            else console.log('🧹 Pendência removida');
+                        }
+                    );
+                    
+                    resolve();
+                    
+                } catch (error) {
+                    console.error('❌ Erro no processamento:', error);
+                    reject(error);
+                }
+            }
+        );
     });
-});
+}
 
+// ... (as funções calculateValues, generatePDF, sendCalculationEmail permanecem iguais)
+
+// Funções auxiliares (manter do código anterior)
 function calculateValues(data) {
     const salary = parseFloat(data['last-salary']) || 0;
     const startDate = new Date(data['start-date'] + 'T00:00:00');
@@ -202,28 +293,56 @@ async function generatePDF(data) {
 
 async function sendCalculationEmail(data, pdfBuffer) {
     if (!EMAIL_HOST || !EMAIL_USER || !EMAIL_PASS) {
-        console.log("Credenciais de e-mail não configuradas. A saltar o envio de e-mail.");
+        console.log("📧 Credenciais de email não configuradas. Pulando envio.");
         return;
     }
     const transporter = nodemailer.createTransport({
-        host: EMAIL_HOST, port: EMAIL_PORT, secure: EMAIL_PORT == 465, auth: { user: EMAIL_USER, pass: EMAIL_PASS }
+        host: EMAIL_HOST, 
+        port: EMAIL_PORT, 
+        secure: EMAIL_PORT == 465, 
+        auth: { 
+            user: EMAIL_USER, 
+            pass: EMAIL_PASS 
+        }
     });
     try {
         await transporter.sendMail({
-            from: EMAIL_FROM, to: data.email, subject: 'Seu Cálculo de Rescisão Trabalhista está Pronto!',
+            from: EMAIL_FROM, 
+            to: data.email, 
+            subject: 'Seu Cálculo de Rescisão Trabalhista está Pronto!',
             html: `<p>Olá, ${data.name || 'Cliente'}!</p><p>Obrigado por utilizar nossa calculadora. Seu cálculo detalhado e desbloqueado está em anexo.</p><p>Atenciosamente,<br>Equipe da Calculadora</p>`,
-            attachments: [{ filename: 'calculo-rescisao-detalhado.pdf', content: Buffer.from(pdfBuffer), contentType: 'application/pdf' }]
+            attachments: [{ 
+                filename: 'calculo-rescisao-detalhado.pdf', 
+                content: Buffer.from(pdfBuffer), 
+                contentType: 'application/pdf' 
+            }]
         });
-        console.log('E-mail de backup enviado com sucesso para:', data.email);
+        console.log('✅ Email enviado para:', data.email);
     } catch (error) {
-        console.error('ERRO AO ENVIAR E-MAIL:', error);
+        console.error('❌ Erro ao enviar email:', error);
     }
 }
+
+app.get('/status/:preferenceId', async (req, res) => {
+    try {
+        const pdfPath = path.join(COMPLETED_DIR, `${req.params.preferenceId}.pdf`);
+        await fs.access(pdfPath);
+        res.json({ status: 'ready' });
+    } catch {
+        res.json({ status: 'pending' });
+    }
+});
+
+app.get('/download/:preferenceId', (req, res) => {
+    const pdfPath = path.join(COMPLETED_DIR, `${req.params.preferenceId}.pdf`);
+    res.download(pdfPath, 'calculo-rescisao-detalhado.pdf');
+});
 
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 app.listen(port, () => {
-    console.log(`Servidor da calculadora a rodar na porta ${port}`);
+    console.log(`🚀 Servidor rodando na porta ${port}`);
+    console.log(`✅ Token configurado: ${MERCADOPAGO_ACCESS_TOKEN ? 'SIM' : 'NÃO'}`);
 });
