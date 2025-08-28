@@ -19,7 +19,7 @@ services:
       - "traefik.http.routers.calculadora-secure.rule=Host(`calculotrabalhista.mbbaj.adv.br`)"
       - "traefik.http.routers.calculadora-secure.entrypoints=websecure"
       - "traefik.http.routers.calculadora-secure.tls=true"
-      - "traefik.http.routers.calculadora-secure.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.calculadora-secure.tls.certresolver=leresolver"
       - "traefik.http.routers.calculadora-secure.service=calculadora-service"
       - "traefik.http.services.calculadora-service.loadbalancer.server.port=3000"
     networks:
