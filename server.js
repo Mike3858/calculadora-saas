@@ -20,7 +20,7 @@ const EMAIL_USER = process.env.EMAIL_USER;
 const EMAIL_PASS = process.env.EMAIL_PASS;
 const EMAIL_FROM = process.env.EMAIL_FROM;
 
-// ==================== VERIFICAÇÃO INICIAL ====================
+// ==================== VERIFICAÇÃO ====================
 console.log('=== 🔧 INICIANDO SERVIDOR ===');
 console.log('✅ Porta: 3000');
 console.log('✅ Token MP:', MERCADOPAGO_ACCESS_TOKEN ? 'PRESENTE' : 'AUSENTE');
@@ -92,7 +92,6 @@ app.post('/preview-calculation', (req, res) => {
 
 app.post('/create-payment', async (req, res) => {
     console.log('💰 SOLICITAÇÃO DE PAGAMENTO RECEBIDA');
-    console.log('📧 Email do cliente:', req.body.email);
     
     try {
         const calculationData = req.body;
@@ -120,15 +119,12 @@ app.post('/create-payment', async (req, res) => {
         };
         
         console.log('🔄 Criando preferência no Mercado Pago...');
-        console.log('🔗 Site URL:', SITE_URL);
-        console.log('🔗 Webhook URL:', WEBHOOK_URL);
         
         const preference = new Preference(client);
         const response = await preference.create({ body: preferenceBody });
         
         console.log('✅ PREFERÊNCIA CRIADA COM SUCESSO!');
         console.log('📋 Preference ID:', response.id);
-        console.log('🔗 Init Point:', response.init_point);
         
         const dataString = JSON.stringify(calculationData);
         db.run(
@@ -154,20 +150,15 @@ app.post('/create-payment', async (req, res) => {
     } catch (error) {
         console.error('❌ ERRO AO CRIAR PAGAMENTO:', error);
         
-        // Debug detalhado do erro
-        if (error.cause) {
-            console.error('📋 Detalhes do erro:', JSON.stringify(error.cause, null, 2));
-        }
-        
         res.status(500).json({ 
             error: 'Erro ao criar pagamento',
-            details: error.message 
+            message: error.message 
         });
     }
 });
 
 app.post('/webhook', async (req, res) => {
-    console.log('📨 WEBHOOK RECEBIDO:', JSON.stringify(req.body, null, 2));
+    console.log('📨 WEBHOOK RECEBIDO');
     
     try {
         const { type, data } = req.body;
@@ -180,7 +171,7 @@ app.post('/webhook', async (req, res) => {
             
             console.log('📊 Status do pagamento:', paymentDetails.status);
             
-            if (paymentDetails.status === 'approved') {
+            if (paymentDetails.status === 'approved' && paymentDetails.external_reference) {
                 console.log('✅ PAGAMENTO APROVADO!');
                 await processApprovedPayment(paymentDetails.external_reference, paymentDetails);
             }
@@ -196,11 +187,6 @@ app.post('/webhook', async (req, res) => {
 
 async function processApprovedPayment(externalReference, paymentDetails) {
     return new Promise((resolve, reject) => {
-        if (!externalReference) {
-            console.log('⚠️ Sem external reference');
-            return resolve();
-        }
-        
         db.get(
             `SELECT data, mp_preference_id FROM pending_calculations WHERE reference_id = ?`,
             [externalReference],
@@ -349,61 +335,10 @@ async function generatePDF(data) {
     return doc.output('arraybuffer');
 }
 
-async function sendCalculationEmail(data, pdfBuffer) {
-    if (!EMAIL_HOST || !EMAIL_USER || !EMAIL_PASS) {
-        console.log("📧 Email não configurado. Pulando envio.");
-        return;
-    }
-    
-    const transporter = nodemailer.createTransport({
-        host: EMAIL_HOST, 
-        port: EMAIL_PORT, 
-        secure: EMAIL_PORT == 465, 
-        auth: { 
-            user: EMAIL_USER, 
-            pass: EMAIL_PASS 
-        }
-    });
-    
-    try {
-        await transporter.sendMail({
-            from: EMAIL_FROM, 
-            to: data.email, 
-            subject: 'Seu Cálculo de Rescisão Trabalhista está Pronto!',
-            html: `
-                <p>Olá, ${data.name || 'Cliente'}!</p>
-                <p>Obrigado por utilizar nossa calculadora. Seu cálculo detalhado e desbloqueado está em anexo.</p>
-                <p>Atenciosamente,<br>Equipe da Calculadora</p>
-            `,
-            attachments: [{ 
-                filename: 'calculo-rescisao-detalhado.pdf', 
-                content: pdfBuffer, 
-                contentType: 'application/pdf' 
-            }]
-        });
-        
-        console.log('✅ Email enviado para:', data.email);
-    } catch (error) {
-        console.error('❌ Erro ao enviar email:', error);
-    }
-}
-
 // ==================== INICIAR SERVIDOR ====================
 app.listen(port, () => {
     console.log('=========================================');
     console.log('🚀 SERVIDOR INICIADO COM SUCESSO!');
     console.log('📍 Porta:', port);
-    console.log('🌐 URL:', SITE_URL);
-    console.log('🔗 Webhook:', WEBHOOK_URL);
-    console.log('✅ Token MP:', MERCADOPAGO_ACCESS_TOKEN ? 'CONFIGURADO' : 'AUSENTE');
     console.log('=========================================');
-});
-
-// ==================== TRATAMENTO DE ERROS ====================
-process.on('unhandledRejection', (error) => {
-    console.error('❌ Erro não tratado:', error);
-});
-
-process.on('uncaughtException', (error) => {
-    console.error('❌ Exceção não capturada:', error);
 });
