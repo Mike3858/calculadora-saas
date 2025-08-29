@@ -6,6 +6,11 @@ services:
       context: .
     container_name: calculadora-saas
     restart: unless-stopped
+    environment:
+      - MERCADOPAGO_ACCESS_TOKEN=${MERCADOPAGO_ACCESS_TOKEN}
+      - SITE_URL=${SITE_URL}
+      - WEBHOOK_URL=${WEBHOOK_URL}
+      - PORT=${PORT:-3000}
     volumes:
       - calculadora-db:/app/leads.db
       - calculadora-pdfs:/app/completed_pdfs
