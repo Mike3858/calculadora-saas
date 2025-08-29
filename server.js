@@ -1,12 +1,11 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
-// MUDANÇA: Importa os componentes corretos da V2
 const { MercadoPagoConfig, Preference, Payment } = require('mercadopago');
 const { jsPDF } = require('jspdf');
 require('jspdf-autotable');
 const fs = require('fs').promises;
-const path = require('path');
+const path = require('path'); // Adicionado para lidar com caminhos de arquivo
 const sqlite3 = require('sqlite3').verbose();
 const crypto = require('crypto');
 
@@ -27,37 +26,39 @@ if (!MERCADOPAGO_ACCESS_TOKEN) {
 }
 
 // ==================== CONFIGURAÇÃO MERCADO PAGO V2 ====================
-console.log('🔄 Configurando cliente Mercado Pago V2...');
 const client = new MercadoPagoConfig({
     accessToken: MERCADOPAGO_ACCESS_TOKEN,
     options: { timeout: 15000 }
 });
-console.log('✅ Cliente Mercado Pago configurado!');
 
 const app = express();
 
-// ==================== BANCO DE DADOS (Sem alterações) ====================
+// ==================== BANCO DE DADOS ====================
 const dbPath = path.join(__dirname, 'leads.db');
 const db = new sqlite3.Database(dbPath, (err) => {
-    if (err) {
-        console.error('❌ Erro no banco:', err.message);
-    } else {
+    if (err) { console.error('❌ Erro no banco:', err.message); } 
+    else {
         console.log('✅ Banco de dados conectado!');
         db.run(`CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, email TEXT, whatsapp TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)`);
         db.run(`CREATE TABLE IF NOT EXISTS pending_calculations (reference_id TEXT PRIMARY KEY, mp_preference_id TEXT, data TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)`);
     }
 });
-
 const COMPLETED_DIR = path.join(__dirname, 'completed_pdfs');
 fs.mkdir(COMPLETED_DIR, { recursive: true }).catch(console.error);
 
 // ==================== MIDDLEWARES ====================
 app.use(cors());
 app.use(bodyParser.json());
-// Serve os arquivos estáticos (como index.html) da pasta raiz
+// Serve os arquivos estáticos (como CSS ou imagens no futuro)
 app.use(express.static(__dirname));
 
 // ==================== ROTAS ====================
+
+// ROTA PRINCIPAL PARA SERVIR O index.html (CORREÇÃO DO 404)
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
 app.post('/preview-calculation', (req, res) => {
     try {
         const results = calculateValues(req.body);
@@ -68,26 +69,18 @@ app.post('/preview-calculation', (req, res) => {
 });
 
 app.post('/create-payment', async (req, res) => {
+    // ... (O resto do seu código permanece exatamente o mesmo)
+    // (Apenas colei o resto aqui para garantir que você tenha o arquivo completo)
     console.log('💰 SOLICITAÇÃO DE PAGAMENTO V2 RECEBIDA');
     try {
         const calculationData = req.body;
         const uniqueReference = crypto.randomUUID();
-
         const preference = new Preference(client);
-
         console.log('🔄 Criando preferência V2 no Mercado Pago...');
         const response = await preference.create({
             body: {
-                items: [{
-                    title: 'Cálculo de Rescisão Trabalhista Detalhado',
-                    quantity: 1,
-                    currency_id: 'BRL',
-                    unit_price: 29.90
-                }],
-                payer: {
-                    email: calculationData.email,
-                    name: calculationData.name || 'Cliente'
-                },
+                items: [{ title: 'Cálculo de Rescisão Trabalhista Detalhado', quantity: 1, currency_id: 'BRL', unit_price: 29.90 }],
+                payer: { email: calculationData.email, name: calculationData.name || 'Cliente' },
                 back_urls: {
                     success: `${process.env.SITE_URL || 'http://localhost:3000'}?status=approved`,
                     failure: `${process.env.SITE_URL || 'http://localhost:3000'}?status=failure`,
@@ -97,11 +90,9 @@ app.post('/create-payment', async (req, res) => {
                 external_reference: uniqueReference
             }
         });
-
         console.log('✅ PREFERÊNCIA CRIADA COM SUCESSO!');
         const dataString = JSON.stringify(calculationData);
-        db.run(
-            `INSERT INTO pending_calculations (reference_id, mp_preference_id, data) VALUES (?, ?, ?)`,
+        db.run( `INSERT INTO pending_calculations (reference_id, mp_preference_id, data) VALUES (?, ?, ?)`,
             [uniqueReference, response.id, dataString],
             (err) => {
                 if (err) {
@@ -109,17 +100,12 @@ app.post('/create-payment', async (req, res) => {
                     return res.status(500).json({ error: 'Erro interno' });
                 }
                 console.log('💾 Dados salvos. Referência:', uniqueReference);
-                res.json({
-                    init_point: response.init_point
-                });
+                res.json({ init_point: response.init_point });
             }
         );
     } catch (error) {
         console.error('❌ ERRO AO CRIAR PAGAMENTO V2:', error);
-        res.status(500).json({
-            error: 'Erro ao criar pagamento',
-            message: error.message
-        });
+        res.status(500).json({ error: 'Erro ao criar pagamento', message: error.message });
     }
 });
 
@@ -144,11 +130,8 @@ app.post('/webhook', async (req, res) => {
     }
 });
 
-// O restante do seu arquivo (funções auxiliares, etc.) permanece o mesmo...
-// Adicionei aqui para garantir que esteja completo.
-
+// ... (O resto do seu código, como processApprovedPayment, calculateValues, etc., permanece aqui)
 async function processApprovedPayment(externalReference, paymentDetails) {
-    // (Esta função pode permanecer como está no seu arquivo original)
     return new Promise((resolve, reject) => {
         db.get( `SELECT data, mp_preference_id FROM pending_calculations WHERE reference_id = ?`, [externalReference],
             async (err, row) => {
@@ -173,7 +156,6 @@ async function processApprovedPayment(externalReference, paymentDetails) {
         );
     });
 }
-
 app.get('/status/:preferenceId', async (req, res) => {
     try {
         const pdfPath = path.join(COMPLETED_DIR, `${req.params.preferenceId}.pdf`);
@@ -183,14 +165,11 @@ app.get('/status/:preferenceId', async (req, res) => {
         res.json({ status: 'pending' });
     }
 });
-
 app.get('/download/:preferenceId', (req, res) => {
     const pdfPath = path.join(COMPLETED_DIR, `${req.params.preferenceId}.pdf`);
     res.download(pdfPath, 'calculo-rescisao-detalhado.pdf');
 });
-
 function calculateValues(data) {
-    // (Esta função pode permanecer como está no seu arquivo original)
     const salary = parseFloat(data['last-salary']) || 0;
     const startDate = new Date(data['start-date'] + 'T00:00:00');
     const endDate = new Date(data['end-date'] + 'T00:00:00');
@@ -213,9 +192,7 @@ function calculateValues(data) {
     const totalGeral = saldoDeSalario + decimoTerceiroProporcional + totalFerias + tercoConstitucional + avisoPrevioIndenizado + multaFGTS;
     return { 'Saldo de Salário': saldoDeSalario, 'Aviso Prévio Indenizado': avisoPrevioIndenizado, '13º Salário Proporcional': decimoTerceiroProporcional, 'Férias Vencidas': feriasVencidas, 'Férias Proporcionais': feriasProporcionais, '1/3 Constitucional sobre Férias': tercoConstitucional, 'Multa de 40% do FGTS (Estimativa)': multaFGTS, 'TOTAL GERAL ESTIMADO': totalGeral };
 }
-
 async function generatePDF(data) {
-    // (Esta função pode permanecer como está no seu arquivo original)
     const calculationResults = calculateValues(data);
     const irregularities = data.irregularities || [];
     const doc = new jsPDF();
