@@ -7,9 +7,10 @@ services:
     container_name: calculadora-saas
     restart: unless-stopped
     volumes:
-      # CORREÇÃO: Montamos volumes para o banco de dados e para os PDFs,
-      # preservando o código da aplicação que está na imagem.
+      # CORREÇÃO: Montamos volumes para arquivos específicos, não para a pasta inteira.
+      # O volume 'calculadora-db' irá persistir o arquivo 'leads.db'.
       - calculadora-db:/app/leads.db
+      # O volume 'calculadora-pdfs' irá persistir a pasta de PDFs gerados.
       - calculadora-pdfs:/app/completed_pdfs
     labels:
       - "traefik.enable=true"
@@ -28,8 +29,8 @@ services:
     networks:
       - calculadora
 
+# Definição dos volumes nomeados
 volumes:
-  # CORREÇÃO: Volumes nomeados específicos para os dados
   calculadora-db:
   calculadora-pdfs:
 
