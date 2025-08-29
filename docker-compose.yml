@@ -6,14 +6,15 @@ services:
       context: .
     container_name: calculadora-saas
     restart: unless-stopped
+    user: "1000:1000"
     environment:
       - MERCADOPAGO_ACCESS_TOKEN=${MERCADOPAGO_ACCESS_TOKEN}
       - SITE_URL=${SITE_URL}
       - WEBHOOK_URL=${WEBHOOK_URL}
       - PORT=${PORT:-3000}
     volumes:
-      - calculadora-db:/app/leads.db
-      - calculadora-pdfs:/app/completed_pdfs
+      - calculora--_calculadora-db:/app
+      - calculora--_calculadora-pdfs:/app/completed_pdfs
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.calculadora-http.rule=Host(`calculotrabalhista.mbbaj.adv.br`)"
@@ -32,8 +33,10 @@ services:
       - calculadora
 
 volumes:
-  calculadora-db:
-  calculadora-pdfs:
+  calculora--_calculadora-db:
+    external: true
+  calculora--_calculadora-pdfs:
+    external: true
 
 networks:
   calculadora:
