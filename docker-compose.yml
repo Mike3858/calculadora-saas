@@ -13,7 +13,7 @@ services:
       - WEBHOOK_URL=${WEBHOOK_URL}
       - PORT=${PORT:-3000}
     volumes:
-      - calculora--_calculadora-db:/app
+      - calculora--_calculadora-db:/app/data
       - calculora--_calculadora-pdfs:/app/completed_pdfs
     labels:
       - "traefik.enable=true"
