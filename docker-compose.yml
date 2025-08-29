@@ -6,8 +6,6 @@ services:
       context: .
     container_name: calculadora-saas
     restart: unless-stopped
-    # MUDANÇA: Esta linha carrega as variáveis do arquivo .env
-    env_file: .env
     volumes:
       - calculadora-db:/app/leads.db
       - calculadora-pdfs:/app/completed_pdfs
