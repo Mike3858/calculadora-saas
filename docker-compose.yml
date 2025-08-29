@@ -7,7 +7,10 @@ services:
     container_name: calculadora-saas
     restart: unless-stopped
     volumes:
-      - calculadora-dados:/app
+      # CORREÇÃO: Montamos volumes para o banco de dados e para os PDFs,
+      # preservando o código da aplicação que está na imagem.
+      - calculadora-db:/app/leads.db
+      - calculadora-pdfs:/app/completed_pdfs
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.calculadora-http.rule=Host(`calculotrabalhista.mbbaj.adv.br`)"
@@ -26,7 +29,9 @@ services:
       - calculadora
 
 volumes:
-  calculadora-dados:
+  # CORREÇÃO: Volumes nomeados específicos para os dados
+  calculadora-db:
+  calculadora-pdfs:
 
 networks:
   calculadora:

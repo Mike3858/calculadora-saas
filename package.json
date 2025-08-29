@@ -17,7 +17,7 @@
     "express": "^4.19.2",
     "jspdf": "^2.5.1",
     "jspdf-autotable": "^3.8.2",
-    "mercadopago": "^1.5.17",
+    "mercadopago": "^2.0.10",
     "nodemailer": "^6.9.14",
     "sqlite3": "^5.1.7"
   }

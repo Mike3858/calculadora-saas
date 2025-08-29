@@ -1,5 +1,7 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF-g">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Calculadora de Rescisão Indireta</title>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -7,14 +9,8 @@
     <script src="https://unpkg.com/imask"></script>
     <style>
         body { font-family: 'Inter', sans-serif; }
-        .spinner {
-            border: 2px solid rgba(0, 0, 0, 0.2); border-radius: 50%; border-top-color: #3498db;
-            width: 24px; height: 24px; animation: spin 1s ease-in-out infinite;
-        }
-        .spinner-btn {
-            border: 2px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top-color: #fff;
-            width: 16px; height: 16px; animation: spin 1s ease-in-out infinite;
-        }
+        .spinner { border: 2px solid rgba(0, 0, 0, 0.2); border-radius: 50%; border-top-color: #3498db; width: 24px; height: 24px; animation: spin 1s ease-in-out infinite; }
+        .spinner-btn { border: 2px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top-color: #fff; width: 16px; height: 16px; animation: spin 1s ease-in-out infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
         .preview-table { border-collapse: collapse; width: 100%; }
         .preview-table th, .preview-table td { text-align: left; padding: 12px; border-bottom: 1px solid #e5e7eb; }
@@ -32,7 +28,6 @@
         </header>
 
         <main id="main-content" class="bg-white p-6 md:p-8 rounded-2xl shadow-lg">
-            <!-- Formulário Principal -->
             <div id="form-section">
                 <form id="calculation-form">
                     <h2 class="text-xl font-semibold text-gray-800 border-b pb-2 mb-6">1. Seus Dados</h2>
@@ -138,24 +133,17 @@
     
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            const backendUrl = 'https://calculotrabalhista.mbbaj.adv.br';
-
             const mainContent = document.getElementById('main-content');
             const formSection = document.getElementById('form-section');
             const blurredResultSection = document.getElementById('blurred-result-section');
             const successSection = document.getElementById('success-section');
-            
             const form = document.getElementById('calculation-form');
             const calculateButton = document.getElementById('calculate-button');
             const paymentButton = document.getElementById('payment-button');
             const resultTable = document.getElementById('result-table-content');
-
             let formDataForPayment = {};
 
-            const salaryMask = IMask(document.getElementById('last-salary'), {
-                mask: 'R$ num',
-                blocks: { num: { mask: Number, thousandsSeparator: '.', radix: ',', scale: 2, padFractionalZeros: true } }
-            });
+            const salaryMask = IMask(document.getElementById('last-salary'), { mask: 'R$ num', blocks: { num: { mask: Number, thousandsSeparator: '.', radix: ',', scale: 2, padFractionalZeros: true } } });
             IMask(document.getElementById('user-whatsapp'), { mask: '(00) 00000-0000' });
 
             calculateButton.addEventListener('click', async () => {
@@ -170,7 +158,7 @@
                 data.irregularities = Array.from(document.querySelectorAll('input[name="irregularity"]:checked')).map(cb => cb.value);
                 formDataForPayment = data;
                 try {
-                    const response = await fetch(`${backendUrl}/preview-calculation`, {
+                    const response = await fetch(`/preview-calculation`, { // MUDANÇA: URL Relativa
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(data)
@@ -196,55 +184,34 @@
             });
 
             paymentButton.addEventListener('click', async () => {
-    localStorage.setItem('lastCalcData', JSON.stringify(formDataForPayment));
-    setButtonLoading(paymentButton, true);
-    
-    try {
-        console.log('🔄 Iniciando pagamento...');
-        const response = await fetch(`${backendUrl}/create-payment`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(formDataForPayment)
-        });
-
-        // ✅ VERIFICA SE HOUVE ERRO NA RESPOSTA
-        if (!response.ok) {
-            let errorMessage = 'Erro ao processar pagamento';
-            
-            try {
-                const errorData = await response.json();
-                errorMessage = errorData.message || errorData.error || errorMessage;
-            } catch (e) {
-                errorMessage = `Erro ${response.status}: ${response.statusText}`;
-            }
-            
-            throw new Error(errorMessage);
-        }
-
-        const paymentData = await response.json();
-        console.log('✅ Resposta do servidor:', paymentData);
-
-        // ✅ VERIFICA SE TEM LINK DE PAGAMENTO
-        const paymentUrl = paymentData.sandbox_init_point || paymentData.init_point;
-        if (!paymentUrl) {
-            throw new Error('Link de pagamento não recebido do servidor');
-        }
-
-        // ✅ REDIRECIONA PARA O PAGAMENTO
-        console.log('🔗 Redirecionando para checkout...');
-        window.location.href = paymentUrl;
-        
-    } catch (error) {
-        console.error('❌ Erro ao iniciar pagamento:', error);
-        alert('Não foi possível iniciar o pagamento: ' + error.message);
-        setButtonLoading(paymentButton, false);
-    }
-});;
-               
+                localStorage.setItem('lastCalcData', JSON.stringify(formDataForPayment));
+                setButtonLoading(paymentButton, true);
+                try {
+                    const response = await fetch(`/create-payment`, { // MUDANÇA: URL Relativa
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(formDataForPayment)
+                    });
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.message || 'Erro ao processar pagamento');
+                    }
+                    const paymentData = await response.json();
+                    const paymentUrl = paymentData.init_point; // MUDANÇA: Espera 'init_point'
+                    if (!paymentUrl) {
+                        throw new Error('Link de pagamento não recebido do servidor');
+                    }
+                    window.location.href = paymentUrl;
+                } catch (error) {
+                    console.error('❌ Erro ao iniciar pagamento:', error);
+                    alert('Não foi possível iniciar o pagamento: ' + error.message);
+                    setButtonLoading(paymentButton, false);
+                }
+            });
 
             const urlParams = new URLSearchParams(window.location.search);
-            const preferenceId = urlParams.get('preference_id');
             const status = urlParams.get('status');
+            const preferenceId = urlParams.get('preference_id');
 
             if (preferenceId && status === 'approved') {
                 mainContent.classList.add('hidden');
@@ -252,7 +219,7 @@
                 document.getElementById('header-subtitle').textContent = 'Seu cálculo está quase pronto!';
                 const interval = setInterval(async () => {
                     try {
-                        const res = await fetch(`${backendUrl}/status/${preferenceId}`);
+                        const res = await fetch(`/status/${preferenceId}`);
                         if (res.ok) {
                             const data = await res.json();
                             if (data.status === 'ready') {
@@ -261,24 +228,9 @@
                                 const downloadArea = document.getElementById('download-area');
                                 const downloadButton = document.getElementById('download-button');
                                 const contactSection = document.getElementById('contact-section');
-                                const whatsappLink = document.getElementById('whatsapp-link');
-                                downloadButton.href = `${backendUrl}/download/${preferenceId}`;
+                                downloadButton.href = `/download/${preferenceId}`;
                                 downloadArea.classList.remove('hidden');
                                 contactSection.classList.remove('hidden');
-                                const lastData = JSON.parse(localStorage.getItem('lastCalcData'));
-                                if(lastData) {
-                                    const results = calculateValues(lastData);
-                                    const irregularities = lastData.irregularities || [];
-                                    let message = `Olá, Dr. Mike! Gerei um cálculo no site e gostaria de tirar uma dúvida.\n\n*RESUMO DO CÁLCULO:*\n`;
-                                    Object.entries(results).forEach(([key, value]) => {
-                                        message += `*${key}:* ${formatCurrency(value)}\n`;
-                                    });
-                                    if (irregularities.length > 0) {
-                                        message += `\n*IRREGULARIDADES APONTADAS:*\n${irregularities.map(i => `- ${i}`).join('\n')}`;
-                                    }
-                                    const baseWhatsappUrl = whatsappLink.href.split('?')[0];
-                                    whatsappLink.href = `${baseWhatsappUrl}?text=${encodeURIComponent(message)}`;
-                                }
                             }
                         }
                     } catch (error) {
@@ -286,7 +238,7 @@
                     }
                 }, 3000);
             }
-
+            // O restante do seu script pode permanecer o mesmo...
             function setButtonLoading(button, isLoading) {
                 const textSpan = button.querySelector('span');
                 const spinner = button.querySelector('.spinner-btn');
@@ -300,37 +252,8 @@
                     spinner.classList.add('hidden');
                 }
             }
-
             function formatCurrency(value) {
                 return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
-            }
-
-            function calculateValues(data) {
-                const salary = parseFloat(data['last-salary']) || 0;
-                const startDate = new Date(data['start-date'] + 'T00:00:00');
-                const endDate = new Date(data['end-date'] + 'T00:00:00');
-                if (isNaN(startDate) || isNaN(endDate) || endDate < startDate) return {};
-                const dailySalary = salary / 30;
-                const daysInLastMonth = endDate.getDate();
-                const saldoDeSalario = dailySalary * daysInLastMonth;
-                const totalMonths = ((endDate.getFullYear() - startDate.getFullYear()) * 12) + (endDate.getMonth() - startDate.getMonth()) + (endDate.getDate() >= startDate.getDate() ? 1 : 0);
-                const monthsFor13th = endDate.getDate() >= 15 ? endDate.getMonth() + 1 : endDate.getMonth();
-                const decimoTerceiroProporcional = (salary / 12) * monthsFor13th;
-                const numFeriasVencidas = parseInt(data['ferias-vencidas'], 10) || 0;
-                const feriasVencidas = salary * numFeriasVencidas;
-                const monthsForFerias = totalMonths % 12;
-                const feriasProporcionais = (salary / 12) * monthsForFerias;
-                const totalFerias = feriasProporcionais + feriasVencidas;
-                const tercoConstitucional = totalFerias / 3;
-                const avisoPrevioIndenizado = salary;
-                const estimatedFGTSTotal = (salary * 0.08) * totalMonths;
-                const multaFGTS = estimatedFGTSTotal * 0.40;
-                const totalGeral = saldoDeSalario + decimoTerceiroProporcional + totalFerias + tercoConstitucional + avisoPrevioIndenizado + multaFGTS;
-                return {
-                    'Saldo de Salário': saldoDeSalario, 'Aviso Prévio Indenizado': avisoPrevioIndenizado, '13º Salário Proporcional': decimoTerceiroProporcional,
-                    'Férias Vencidas': feriasVencidas, 'Férias Proporcionais': feriasProporcionais, '1/3 Constitucional sobre Férias': tercoConstitucional,
-                    'Multa de 40% do FGTS (Estimativa)': multaFGTS, 'TOTAL GERAL ESTIMADO': totalGeral
-                };
             }
         });
     </script>
